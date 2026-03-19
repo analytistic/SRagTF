@@ -29,13 +29,14 @@ class ST_Rec_ModuleOutput(ModelOutput):
 @dataclass
 class ST_Channel_ModuleOutput(ModelOutput):
     x: torch.Tensor
+    x_rec: torch.Tensor | None = None
     attn: torch.Tensor | None = None
 
 @dataclass
 class ST_TruncateFormerOutput(ModelOutput):
     x: torch.Tensor
-    rec_logits: torch.Tensor | None = None
-    attn: torch.Tensor | None = None
+    x_rec: torch.Tensor | None = None
+    attn: tuple[torch.Tensor, ...] | None = None
 
 class ST_Rec_Module(nn.Module):
     def __init__(self, config: ST_LinearConfig):
@@ -80,12 +81,34 @@ class ST_Rec_Module(nn.Module):
 
         return ST_Rec_ModuleOutput(query_x=q, rec_x=rec_x, rec_logits=logits if return_logits else None) # B, C, k, D
     
+
+class ST_CrossFormer(nn.Module):
+    def __init__(self, config: ST_LinearConfig):
+        super().__init__()
+        self.config = config
+        self.channel_model = ST_Channel_Module(config)
+        self.Inter_model = ST_Temporal_Module(config)
+        
+
+    def forward(self, x: torch.Tensor, x_rec: torch.Tensor, return_attn=False) -> ST_TruncateFormerOutput:
+        B, C, D = x.shape
+        outputs = self.channel_model.forward(x, x_rec, x_rec, return_attn=return_attn)
+        x = self.Inter_model.forward(torch.cat([outputs.x.unsqueeze(2), outputs.x_rec], dim=2)) # type: ignore
+        
+
+        return ST_TruncateFormerOutput(x=x[:, :, 0, :],
+                                       x_rec=x[:, :, 1:, :],
+                                    attn=outputs.attn if return_attn else None
+                                    )
+    
 class ST_Channel_Module(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        self.mha = nn.MultiheadAttention(config.projection_dim, num_heads=config.num_heads, batch_first=True, dropout=config.attn_dropout)
-        self.norm = nn.LayerNorm(config.projection_dim)
+        self.mha_1 = nn.MultiheadAttention(config.projection_dim, num_heads=config.num_heads, batch_first=True, dropout=config.attn_dropout)
+        self.mha_2 = nn.MultiheadAttention(config.projection_dim, num_heads=config.num_heads, batch_first=True, dropout=config.attn_dropout)
+        self.norm1 = nn.LayerNorm(config.projection_dim)
+        self.norm2 = nn.LayerNorm(config.projection_dim)
         # self.query_emb = nn.Parameter(torch.randn(config.channel_dim, config.projection_dim))
         self.attn_query_dropout = nn.Dropout(config.attn_query_dropout)
         self.attn_output_dropout = nn.Dropout(config.attn_output_dropout)
@@ -94,16 +117,24 @@ class ST_Channel_Module(nn.Module):
         B, C, D = q.shape
         # k = torch.cat([q.unsqueeze(2), k], dim=2)
         # v = torch.cat([q.unsqueeze(2), v], dim=2)
-        x, attn = self.mha(
+        x, attn = self.mha_1(
             # self.attn_query_dropout((q + self.query_emb.unsqueeze(0).expand(q.shape[0], -1, -1)).reshape(B*C, 1, D)),
             self.attn_query_dropout(q.reshape(B*C, 1, D)),
             k.reshape(B*C, -1, D),
             v.reshape(B*C, -1, D),
             need_weights=return_attn
         )
-        x = self.norm(self.attn_output_dropout(x.reshape(B, C, D) + q))
+        x_rec, _ = self.mha_2(
+            self.attn_query_dropout(k.reshape(B*C, -1, D)),
+            q.reshape(B*C, 1, D),
+            q.reshape(B*C, 1, D),
+        )
+
+        x = self.norm1(self.attn_output_dropout(x.reshape(B, C, D) + q))
+        x_rec = self.norm2(self.attn_output_dropout(x_rec.reshape(B, C, -1, D) + k))
         return ST_Channel_ModuleOutput(
             x=x,
+            x_rec=x_rec,
             attn=attn if return_attn else None
         )
     
@@ -132,7 +163,7 @@ class ST_Temporal_Module(nn.Module):
         self.norm = nn.LayerNorm(config.temporal_dim)
 
     def forward(self, x: torch.Tensor):
-        B, C, D = x.shape
+
         x = self.proj_input(x)
         x = self.norm(self.mlp(x) + x)
         x = self.proj_output(x)
@@ -142,19 +173,24 @@ class ST_TruncateFormer(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        self.spatio_rec = ST_Rec_Module(config)
-        self.channel_model = ST_Channel_Module(config)
-        self.Inter_model = ST_Temporal_Module(config)
+        self.layers = nn.ModuleList(
+            [
+                ST_CrossFormer(config) 
+                for _ in range(config.layers)
+            ]
+        )
         
 
-    def forward(self, x: torch.Tensor, return_attn=False, return_logits=False):
+    def forward(self, x: torch.Tensor, x_rec: torch.Tensor, return_attn=False):
         B, C, D = x.shape
-        rec_outputs = self.spatio_rec.forward(q=x, k=x, v=x, return_logits=return_logits)
-        cross_outputs = self.channel_model.forward(x, rec_outputs.rec_x, rec_outputs.rec_x, return_attn=return_attn)
-        x = self.Inter_model.forward(cross_outputs.x)
+        attn = ()
+        for layer in self.layers:
+            outputs = layer(x, x_rec, return_attn=return_attn)
+            x = outputs.x
+            x_rec = outputs.x_rec
+            attn = attn + (outputs.attn,) if return_attn else attn
         return ST_TruncateFormerOutput(x=x, 
-            rec_logits=rec_outputs.rec_logits if return_logits else None,
-            attn=cross_outputs.attn if return_attn else None
+            attn=attn if return_attn else None
             )
 
 
@@ -174,7 +210,7 @@ class RevIN(nn.Module):
     """copyed from
     https://github.com/ts-kim/RevIN
     """
-    def __init__(self, num_features: int, eps=1e-5, affine=False):
+    def __init__(self, num_features: int, eps=1e-5, affine=True):
         """
         :param num_features: the number of features or channels
         :param eps: a value added for numerical stability
@@ -242,24 +278,22 @@ class ST_LinearModel(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        self.revin = RevIN(config.channel_dim)
+        # self.revin = RevIN(config.channel_dim)
         self.encoder = TimeEncoder(config)
-        self.layers = nn.ModuleList([ST_TruncateFormer(config) for _ in range(config.layers)])
+        self.rec_module = ST_Rec_Module(config)
+        self.former = ST_TruncateFormer(config)
         self.predictor = Flat_Prediction_Module(config)
 
 
     def forward(self, input_ids: torch.Tensor, return_logits=False, return_attn=False):
-        input_ids = self.revin(input_ids, mode="norm")
+        # input_ids = self.revin(input_ids, mode="norm")
         rec_logits = ()
         attn = ()
         input_ids = self.encoder(input_ids.permute(0, 2, 1))
-        for layer in self.layers:
-            outputs = layer(input_ids, return_attn=return_attn, return_logits=return_logits)
-            input_ids = outputs.x
-            rec_logits = rec_logits + (outputs.rec_logits,) if return_logits else rec_logits
-            attn = attn + (outputs.attn,) if return_attn else attn
-        x = self.predictor(input_ids).permute(0, 2, 1)
-        x = self.revin(x, mode="denorm")
+        rec_outputs = self.rec_module.forward(input_ids, input_ids, input_ids, return_logits=return_logits)
+        former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
+        x = self.predictor(former_outputs.x).permute(0, 2, 1)
+        # x = self.revin(x, mode="denorm")
 
         return ST_LinearModelOutput(pred=x, rec_logits=rec_logits, attn=attn)
     
