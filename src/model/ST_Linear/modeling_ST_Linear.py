@@ -16,13 +16,13 @@ class ST_LinearForTrafficPredictionOutput(ModelOutput):
 
 @dataclass
 class ST_LinearModelOutput(ModelOutput):
-    pred: torch.Tensor
+    pred: tuple[torch.Tensor, ...] | torch.Tensor
     rec_logits: tuple[torch.Tensor, ...] | None = None
     attn: tuple[torch.Tensor, ...] | None = None
 
 @dataclass
 class ST_Rec_ModuleOutput(ModelOutput):
-    query_x: torch.Tensor | None = None
+    query_x: torch.Tensor
     rec_x: torch.Tensor | None = None
     rec_logits: torch.Tensor | None = None
 
@@ -33,10 +33,15 @@ class ST_Channel_ModuleOutput(ModelOutput):
     attn: torch.Tensor | None = None
 
 @dataclass
-class ST_TruncateFormerOutput(ModelOutput):
+class ST_CrossFormerOutput(ModelOutput):
     x: torch.Tensor
+    attn: torch.Tensor | None = None
+
+@dataclass
+class ST_TruncateFormerOutput(ModelOutput):
+    x: tuple[torch.Tensor, ...]
     x_rec: torch.Tensor | None = None
-    attn: tuple[torch.Tensor, ...] | None = None
+    attn: tuple[torch.Tensor, ...] | torch.Tensor | None = None
 
 class ST_Rec_Module(nn.Module):
     def __init__(self, config: ST_LinearConfig):
@@ -90,25 +95,23 @@ class ST_CrossFormer(nn.Module):
         self.Inter_model = ST_Temporal_Module(config)
         
 
-    def forward(self, x: torch.Tensor, x_rec: torch.Tensor, return_attn=False) -> ST_TruncateFormerOutput:
+    def forward(self, x: torch.Tensor, x_rec: torch.Tensor, return_attn=False) -> ST_CrossFormerOutput:
         B, C, D = x.shape
         outputs = self.channel_model.forward(x, x_rec, x_rec, return_attn=return_attn)
-        x = self.Inter_model.forward(torch.cat([outputs.x.unsqueeze(2), outputs.x_rec], dim=2)) # type: ignore
+        x = self.Inter_model.forward(outputs.x) # type: ignore
         
 
-        return ST_TruncateFormerOutput(x=x[:, :, 0, :],
-                                       x_rec=x[:, :, 1:, :],
+        return ST_CrossFormerOutput(x=x,
                                     attn=outputs.attn if return_attn else None
-                                    )
+        )
     
 class ST_Channel_Module(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        self.mha_1 = nn.MultiheadAttention(config.projection_dim, num_heads=config.num_heads, batch_first=True, dropout=config.attn_dropout)
-        self.mha_2 = nn.MultiheadAttention(config.projection_dim, num_heads=config.num_heads, batch_first=True, dropout=config.attn_dropout)
-        self.norm1 = nn.LayerNorm(config.projection_dim)
-        self.norm2 = nn.LayerNorm(config.projection_dim)
+        self.mha = nn.MultiheadAttention(config.projection_dim, num_heads=config.num_heads, batch_first=True, dropout=config.attn_dropout)
+        self.norm = nn.LayerNorm(config.projection_dim)
+
         # self.query_emb = nn.Parameter(torch.randn(config.channel_dim, config.projection_dim))
         self.attn_query_dropout = nn.Dropout(config.attn_query_dropout)
         self.attn_output_dropout = nn.Dropout(config.attn_output_dropout)
@@ -117,24 +120,18 @@ class ST_Channel_Module(nn.Module):
         B, C, D = q.shape
         # k = torch.cat([q.unsqueeze(2), k], dim=2)
         # v = torch.cat([q.unsqueeze(2), v], dim=2)
-        x, attn = self.mha_1(
+        x, attn = self.mha(
             # self.attn_query_dropout((q + self.query_emb.unsqueeze(0).expand(q.shape[0], -1, -1)).reshape(B*C, 1, D)),
             self.attn_query_dropout(q.reshape(B*C, 1, D)),
             k.reshape(B*C, -1, D),
             v.reshape(B*C, -1, D),
             need_weights=return_attn
         )
-        x_rec, _ = self.mha_2(
-            self.attn_query_dropout(k.reshape(B*C, -1, D)),
-            q.reshape(B*C, 1, D),
-            q.reshape(B*C, 1, D),
-        )
 
-        x = self.norm1(self.attn_output_dropout(x.reshape(B, C, D) + q))
-        x_rec = self.norm2(self.attn_output_dropout(x_rec.reshape(B, C, -1, D) + k))
+        x = self.norm(self.attn_output_dropout(x.reshape(B, C, D) + q))
         return ST_Channel_ModuleOutput(
             x=x,
-            x_rec=x_rec,
+            x_rec=k,
             attn=attn if return_attn else None
         )
     
@@ -184,18 +181,17 @@ class ST_TruncateFormer(nn.Module):
     def forward(self, x: torch.Tensor, x_rec: torch.Tensor, return_attn=False):
         B, C, D = x.shape
         attn = ()
+        x_list = ()
         for layer in self.layers:
-            outputs = layer(x, x_rec, return_attn=return_attn)
+            outputs = layer.forward(x, x_rec, return_attn=return_attn)
+            x_list = x_list + (outputs.x,)
             x = outputs.x
-            x_rec = outputs.x_rec
             attn = attn + (outputs.attn,) if return_attn else attn
-        return ST_TruncateFormerOutput(x=x, 
-            attn=attn if return_attn else None
-            )
+            
+        return ST_TruncateFormerOutput(x=x_list, attn=attn if return_attn else None)
 
 
-
-class Flat_Prediction_Module(nn.Module):
+class Prediction_Module(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
@@ -282,7 +278,7 @@ class ST_LinearModel(nn.Module):
         self.encoder = TimeEncoder(config)
         self.rec_module = ST_Rec_Module(config)
         self.former = ST_TruncateFormer(config)
-        self.predictor = Flat_Prediction_Module(config)
+        self.predictor = Prediction_Module(config)
 
 
     def forward(self, input_ids: torch.Tensor, return_logits=False, return_attn=False):
@@ -292,19 +288,29 @@ class ST_LinearModel(nn.Module):
         input_ids = self.encoder(input_ids.permute(0, 2, 1))
         rec_outputs = self.rec_module.forward(input_ids, input_ids, input_ids, return_logits=return_logits)
         former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
-        x = self.predictor(former_outputs.x).permute(0, 2, 1)
+        pred = ()
+        for x in former_outputs.x:
+            pred = pred + (self.predictor(x).permute(0, 2, 1),)
+
+
+
         # x = self.revin(x, mode="denorm")
 
-        return ST_LinearModelOutput(pred=x, rec_logits=rec_logits, attn=attn)
-    
+        return ST_LinearModelOutput(pred=pred, rec_logits=rec_logits, attn=attn)
+
 class ST_Loss(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
         self.criterion = nn.MSELoss()
 
-    def forward(self, pred: torch.Tensor, labels: torch.Tensor):
-        loss = self.criterion(pred, labels)
+    def forward(self, pred: tuple[torch.Tensor, ...] | torch.Tensor, labels: torch.Tensor):
+        loss = 0
+        if isinstance(pred, tuple):
+            for p in pred:
+                loss = loss + self.criterion(p, labels)
+        else:
+            loss = self.criterion(pred, labels)
         return loss
 
 
@@ -336,9 +342,6 @@ class ST_LinearForTrafficPrediction(PreTrainedModel):
         pass
   
         
-
-    
-
         
 
     def forward(self, timeseries: torch.Tensor, labels: torch.Tensor | None = None, return_logits: bool = True) -> ST_LinearForTrafficPredictionOutput:
@@ -347,7 +350,7 @@ class ST_LinearForTrafficPrediction(PreTrainedModel):
         loss = None
         if labels is not None:
             loss = self.criterion.forward(x.pred, labels)
-        return ST_LinearForTrafficPredictionOutput(loss=loss, pred=x.pred, rec_logits=x.rec_logits, attn=x.attn)
+        return ST_LinearForTrafficPredictionOutput(loss=loss, pred=x.pred[-1], rec_logits=x.rec_logits, attn=x.attn)
     
 
 
