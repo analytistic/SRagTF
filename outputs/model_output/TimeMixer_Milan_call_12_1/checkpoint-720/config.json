@@ -1,0 +1,29 @@
+{
+  "architectures": [
+    "TimeMixer"
+  ],
+  "c_out": 100,
+  "channel_independence": 1,
+  "d_ff": 256,
+  "d_model": 128,
+  "decomp_method": "moving_avg",
+  "down_sampling_layers": 2,
+  "down_sampling_method": "avg",
+  "down_sampling_window": 3,
+  "dropout": 0.1,
+  "dtype": "float32",
+  "e_layers": 1,
+  "embed": "fixed",
+  "enc_in": 100,
+  "freq": "h",
+  "label_len": 0,
+  "model_type": "time_mixer",
+  "moving_avg": 3,
+  "pred_len": 1,
+  "seq_len": 12,
+  "task_name": "long_term_forecast",
+  "transformers_version": "5.3.0",
+  "use_cache": false,
+  "use_future_temporal_feature": false,
+  "use_norm": 1
+}

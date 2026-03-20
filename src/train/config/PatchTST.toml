@@ -6,30 +6,31 @@ data_key = "sms"
 scale = true
 
 [model_args]
-pretrained_model_name_or_path = "ST_Linear"
+pretrained_model_name_or_path = "PatchTST"
 
 [model_args.config]
 seq_len = 12
 pred_len = 1
-patch_size = 16
-projection_dim = 128
-spatio_topk = 4
-channel_dim = 100
-temperature = 0.1
-rec_dim = 128
-temporal_dim = 128
-temporal_ffn = 256
-temporal_proj = false
-act_fn = "relu"
-num_heads = 8
-layers = 2
-encode_dropout = 0.0
-attn_dropout = 0.0
-attn_output_dropout = 0.0
-ffn_1_dropout = 0.0
-ffn_2_dropout = 0.0
-rec_query_dropout = 0.0
-attn_query_dropout = 0.0
+e_layers = 3
+n_heads = 8
+d_model = 128
+d_ff = 256
+dropout = 0.2
+fc_dropout = 0.2
+head_dropout = 0.0
+individual = false
+patch_len = 3
+stride = 1
+padding_patch = 'end' 
+revin = true
+affine = false
+subtract_last = 0
+decomposition = 0
+kernel_size = 25
+activation = 'gelu'
+
+
+
 
 [training_args]
 seed = 42

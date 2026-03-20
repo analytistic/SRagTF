@@ -11,10 +11,27 @@ import numpy as np
 from .modeling_module import PatchTST_backbone, series_decomp
 from transformers import PreTrainedModel
 from .configuration_PatchTST import PatchTSTConfig
+from dataclasses import dataclass, field
+from transformers.utils.generic import ModelOutput
 
+@dataclass
+class PatchTST_PredictorOutput(ModelOutput):
+    loss: Optional[Tensor] = None
+    pred: Optional[Tensor] = None
+
+
+class PatchTST_Loss(nn.Module):
+    def __init__(self, config: PatchTSTConfig):
+        super().__init__()
+        self.config = config
+        self.criterion = nn.MSELoss()
+
+    def forward(self, pred: torch.Tensor, labels: torch.Tensor):
+        loss = self.criterion(pred, labels)
+        return loss
 
 class PatchTST(PreTrainedModel):
-    def __init__(self, configs: PatchTSTConfig):
+    def __init__(self, configs: PatchTSTConfig, **kwargs):
         
         super().__init__(configs)
         
@@ -61,6 +78,8 @@ class PatchTST(PreTrainedModel):
         head_type = configs.head_type
         verbose = configs.verbose
 
+        self.criterion = PatchTST_Loss(configs)
+
 
         # model
         self.decomposition = decomposition
@@ -93,7 +112,8 @@ class PatchTST(PreTrainedModel):
                                   subtract_last=subtract_last, verbose=verbose, **kwargs)
     
     
-    def forward(self, x):           # x: [Batch, Input length, Channel]
+    def forward(self, timeseries, labels):           # x: [Batch, Input length, Channel]
+        x = timeseries
         if self.decomposition:
             res_init, trend_init = self.decomp_module(x)
             res_init, trend_init = res_init.permute(0,2,1), trend_init.permute(0,2,1)  # x: [Batch, Channel, Input length]
@@ -105,4 +125,10 @@ class PatchTST(PreTrainedModel):
             x = x.permute(0,2,1)    # x: [Batch, Channel, Input length]
             x = self.model(x)
             x = x.permute(0,2,1)    # x: [Batch, Input length, Channel]
-        return x
+
+        loss = None
+        if labels is not None:
+            loss = self.criterion(x, labels)
+        return PatchTST_PredictorOutput(loss=loss, pred=x)
+
+    
