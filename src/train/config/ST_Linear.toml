@@ -1,6 +1,6 @@
 [data_args]
-datasets = "Milan"
-data_path = "data/milano.h5"
+datasets = "NanJing"
+data_path = "data/nanjing/24_TrafficNC_short64.json"
 num_cells = 100
 data_key = "sms"
 scale = true

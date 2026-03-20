@@ -1,8 +1,8 @@
 from src.train.trainer.base_trainer import BaseTrainer
 from src.train.utils.arguments import TrainingArguments, ModelArguments, DataArguments
 from src.train.metrics.eval import MetricsComputer
-from src.data.milan_datasets import MilanDataset
-from src.data import BaseCollator
+from src.dataset import *
+from src.dataset import BaseCollator
 from src.model import *
 
 import argparse
@@ -17,6 +17,10 @@ model_dict = {
     'iTransformer': (iTransformer, iTransformerConfig, iTransformerProcessor),
     'PatchTST': (PatchTST, PatchTSTConfig, PatchTSTProcessor),
     'TimeMixer': (TimeMixer, TimeMixerConfig, TimeMixerProcessor)
+}
+dataset_dict = {
+    'NanJing': NanJingDataset,
+    'Milan': MilanDataset,
 }
 
 
@@ -36,7 +40,7 @@ def train(config_path=None):
 
 
     # Initialize dataset and trainer
-    train_dataset = MilanDataset(
+    train_dataset = dataset_dict[data_args.datasets](
         data_path=data_args.data_path,
         datasets=data_args.datasets,
         seq_len=model_args.config.get("seq_len", 512),
@@ -47,7 +51,7 @@ def train(config_path=None):
         data_key=getattr(data_args, "data_key", "call"),
         mode="train",
     )
-    eval_dataset = MilanDataset(
+    eval_dataset = dataset_dict[data_args.datasets](
         data_path=data_args.data_path,
         datasets=data_args.datasets,
         seq_len=model_args.config.get("seq_len", 512),
@@ -58,7 +62,7 @@ def train(config_path=None):
         data_key=getattr(data_args, "data_key", "call"),
         mode="eval",
     )
-    test_dataset = MilanDataset(
+    test_dataset = dataset_dict[data_args.datasets](
         data_path=data_args.data_path,
         datasets=data_args.datasets,
         seq_len=model_args.config.get("seq_len", 512),
