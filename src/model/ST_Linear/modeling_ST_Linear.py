@@ -289,8 +289,7 @@ class ST_LinearModel(nn.Module):
         rec_outputs = self.rec_module.forward(input_ids, input_ids, input_ids, return_logits=return_logits)
         former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
         pred = ()
-        for x in former_outputs.x:
-            pred = pred + (self.predictor(x).permute(0, 2, 1),)
+        pred = pred + (self.predictor(former_outputs.x[-1]).permute(0, 2, 1),)
 
 
 

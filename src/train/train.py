@@ -86,6 +86,6 @@ def train(config_path=None):
     trainer.train()
 
 if __name__ == "__main__":
-    config_path = '/Users/alex/project/SR_Linear/src/train/config/TimeMixer.toml'
+    config_path = '/Users/alex/project/SR_Linear/src/train/config/ST_Linear.toml'
 
     train(config_path)

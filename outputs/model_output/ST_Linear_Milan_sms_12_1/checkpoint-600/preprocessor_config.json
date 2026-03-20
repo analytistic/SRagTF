@@ -1,5 +1,5 @@
 {
-  "feature_extractor_type": "PatchTSTProcessor",
+  "feature_extractor_type": "ST_LinearProcessor",
   "mean": [
     [
       3.403740425531915,
