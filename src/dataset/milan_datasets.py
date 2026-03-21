@@ -9,18 +9,19 @@ import h5py
 import pandas as pd
 from typing import Optional, Tuple, Dict, Any, Callable
 import inspect
-
+from ..model.utils.scaler import ScalerType
 
 
 
 class MilanDataset(BaseDataset):
     def __init__(
         self,
-        datasets: str,
+        datasets: str, 
         data_path: str,
         seq_len: int = 24,      
         pred_len: int = 12,
         scale: bool = True,
+        scaler_type: ScalerType | None = None,
         processor: Optional[Callable] = None,
         **kwargs
     ):
@@ -39,6 +40,7 @@ class MilanDataset(BaseDataset):
         self.seq_len = seq_len
         self.pred_len = pred_len
         self.scale = scale
+        self.scaler_type = scaler_type
         self.post_init(processor)
 
     def _load_data(self):
@@ -69,26 +71,27 @@ class MilanDataset(BaseDataset):
         low_idx = low_idx_list[["train", "test", "eval"].index(self.mode)]
         up_idx = up_idx_list[["train", "test", "eval"].index(self.mode)]
         train_timeseries = timeseries.iloc[low_idx_list[0]:up_idx_list[0]]
-        scaler = None
-        if self.scale:
-            scaler = StandardScaler()
-            scaler.fit(train_timeseries.values)
+
+        if processor is not None:
+            if inspect.isclass(processor):
+                self.processor = processor(
+                    scale=self.scale,
+                    scaler_type=self.scaler_type,
+                )
+                self.processor.fit(train_timeseries.values)
+            else:
+                self.processor = processor
+        else:
+            self.processor = None
+
         self.timeseries = timeseries.iloc[low_idx:up_idx]
         self.other_features = {
             "cell_lng": cell_lng,
             "cell_lat": cell_lat,
         }
-        self.timestamp = timeseries.index[low_idx:up_idx]      
-        if processor is not None:
-            if inspect.isclass(processor):
-                self.processor = processor(
-                    scale=self.scale,
-                    transform=scaler,
-                )
-            else:
-                self.processor = processor
-        else:
-            self.processor = None
+        self.timestamp = timeseries.index[low_idx:up_idx]       
+
+
         
  
     def __len__(self):

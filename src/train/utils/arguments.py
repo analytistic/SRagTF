@@ -24,6 +24,12 @@ class DataArguments:
             "help": "Whether to scale the data"
         },
     )
+    scaler_type: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "Type of scaler to use (e.g., 'standary', 'minmax')"
+        },
+    )
     num_cells: Optional[int] = field(
         default=None,
         metadata={

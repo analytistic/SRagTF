@@ -6,11 +6,11 @@ class BaseCollator:
     
 from .base_dataset import BaseDataset
 from .milan_datasets import MilanDataset
-from .nanjing_datasets import NanJingDataset
+from .mobiletraffic_datasets import MobileTrafficDataset
 
 __all__ = [
     "BaseCollator",
     "BaseDataset",
     "MilanDataset",
-    "NanJingDataset",
+    "MobileTrafficDataset",
 ]

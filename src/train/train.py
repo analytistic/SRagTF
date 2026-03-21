@@ -19,8 +19,9 @@ model_dict = {
     'TimeMixer': (TimeMixer, TimeMixerConfig, TimeMixerProcessor)
 }
 dataset_dict = {
-    'NanJing': NanJingDataset,
+    'NanJing': MobileTrafficDataset,
     'Milan': MilanDataset,
+    'NanChang': MobileTrafficDataset,
 }
 
 
@@ -46,6 +47,7 @@ def train(config_path=None):
         seq_len=model_args.config.get("seq_len", 512),
         pred_len=model_args.config.get("pred_len", 128),
         scale=data_args.scale,
+        scaler_type=data_args.scaler_type,
         num_cells=getattr(data_args, "num_cells", 100),
         processor=model_dict[model_args.pretrained_model_name_or_path][2],
         data_key=getattr(data_args, "data_key", "call"),
@@ -57,6 +59,7 @@ def train(config_path=None):
         seq_len=model_args.config.get("seq_len", 512),
         pred_len=model_args.config.get("pred_len", 128),
         scale=data_args.scale,
+        scaler_type=data_args.scaler_type,
         num_cells=getattr(data_args, "num_cells", 100),
         processor=model_dict[model_args.pretrained_model_name_or_path][2],
         data_key=getattr(data_args, "data_key", "call"),
@@ -68,6 +71,7 @@ def train(config_path=None):
         seq_len=model_args.config.get("seq_len", 512),
         pred_len=model_args.config.get("pred_len", 128),
         scale=data_args.scale,
+        scaler_type=data_args.scaler_type,
         num_cells=getattr(data_args, "num_cells", 100),
         processor=model_dict[model_args.pretrained_model_name_or_path][2],
         data_key=getattr(data_args, "data_key", "call"),
@@ -90,6 +94,6 @@ def train(config_path=None):
     trainer.train()
 
 if __name__ == "__main__":
-    config_path = '/Users/alex/project/SR_Linear/src/train/config/ST_Linear.toml'
+    config_path = 'src/train/config/NanChang/short/ST_Linear.toml'
 
     train(config_path)

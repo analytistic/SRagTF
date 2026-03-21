@@ -1,9 +1,10 @@
 [data_args]
-datasets = "NanJing"
-data_path = "data/nanjing/24_TrafficNC_short64.json"
+datasets = "Milan"
+data_path = "/Users/alex/project/SR_Linear/data/milano.h5"
 num_cells = 100
-data_key = "sms"
+data_key = "call"
 scale = true
+scaler_type = 'standary'
 
 [model_args]
 pretrained_model_name_or_path = "ST_Linear"
@@ -34,7 +35,7 @@ attn_query_dropout = 0.0
 [training_args]
 seed = 42
 fp32 = true
-output_dir = "outputs/model_output/ST_Linear_Milan_sms_12_1/"
+output_dir = "outputs/model_output/ST_Linear_Milan_call_12_1/"
 num_train_epochs = 50
 optim = "adamw_torch"
 learning_rate = 1e-4
@@ -44,7 +45,7 @@ report_to = "tensorboard"
 log_level = "info"
 log_level_replica = "warning"
 logging_strategy = "steps"
-logging_dir = "outputs/tensorboard/ST_Linear_Milan_sms_12_1/"
+logging_dir = "outputs/tensorboard/ST_Linear_Milan_call_12_1/"
 logging_steps = 10
 logging_first_step = true
 save_strategy = "epoch"
