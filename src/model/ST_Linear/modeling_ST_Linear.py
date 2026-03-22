@@ -173,6 +173,7 @@ class ST_TruncateFormer(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
+        self.encoder = TimeEncoder(config)
         self.layers = nn.ModuleList(
             [
                 ST_CrossFormer(config) 
@@ -185,6 +186,8 @@ class ST_TruncateFormer(nn.Module):
         B, C, D = x.shape
         attn = ()
         x_list = ()
+        x = self.encoder(x)
+        x_rec = self.encoder(x_rec)
         for layer in self.layers:
             outputs = layer.forward(x, x_rec, return_attn=return_attn)
             x_list = x_list + (outputs.x,)
@@ -268,7 +271,7 @@ class TimeEncoder(nn.Module):
         self.dropout = nn.Dropout(config.encode_dropout)
 
     def forward(self, x: torch.Tensor):
-        B, C, D = x.shape
+
         x = self.linear(x)
         return self.dropout(x)
 
@@ -279,7 +282,6 @@ class ST_LinearModel(nn.Module):
         super().__init__()
         self.config = config
         self.revin = RevIN(config.channel_dim)
-        self.encoder = TimeEncoder(config)
         self.rec_module = ST_Rec_Module(config)
         self.former = ST_TruncateFormer(config)
         self.predictor = Prediction_Module(config)
@@ -289,8 +291,8 @@ class ST_LinearModel(nn.Module):
         # input_ids = self.revin(input_ids, mode="norm")
         rec_logits = ()
         attn = ()
-        x = self.encoder(input_ids.permute(0, 2, 1))
-        rec_outputs = self.rec_module.forward(x, x, input_ids, return_logits=return_logits)
+        input_ids = input_ids.permute(0, 2, 1) # B, C, T
+        rec_outputs = self.rec_module.forward(input_ids, input_ids, input_ids, return_logits=return_logits)
         former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
 
         pred = self.predictor(former_outputs.x[-1]).permute(0, 2, 1)
