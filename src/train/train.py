@@ -22,6 +22,7 @@ dataset_dict = {
     'NanJing': MobileTrafficDataset,
     'Milan': MilanDataset,
     'NanChang': MobileTrafficDataset,
+    'ShanDong': MobileTrafficDataset,
 }
 
 
@@ -94,6 +95,6 @@ def train(config_path=None):
     trainer.train()
 
 if __name__ == "__main__":
-    config_path = 'src/train/config/NanJing/ST_Linear.toml'
+    config_path = 'src/train/config/ShanDong/ST_Linear.toml'
 
     train(config_path)

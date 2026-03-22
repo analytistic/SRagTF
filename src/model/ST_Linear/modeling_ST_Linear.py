@@ -49,11 +49,12 @@ class ST_Rec_Module(nn.Module):
         self.config = config
         self.topk = config.spatio_topk
         self.temperature = config.temperature
-        self.spatio_proj_q = nn.Linear(config.projection_dim, config.rec_dim, bias=False)
-        self.spatio_proj_k = nn.Linear(config.projection_dim, config.rec_dim, bias=False)
+        self.spatio_proj_q = nn.Linear(config.seq_len, config.rec_dim, bias=False)
+        self.spatio_proj_k = nn.Linear(config.seq_len, config.rec_dim, bias=False)
         # self.logits_bias = nn.Parameter(torch.zeros(config.channel_dim, config.channel_dim), requires_grad=True)
         # self.query_emb = nn.Parameter(torch.randn(config.channel_dim, config.rec_dim))
         self.rec_query_dropout = nn.Dropout(config.rec_query_dropout)
+        self.out_linear = nn.Linear(config.seq_len, config.projection_dim)
 
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, return_logits=False) -> ST_Rec_ModuleOutput:
@@ -83,6 +84,8 @@ class ST_Rec_Module(nn.Module):
             topk_idx = logits.topk(self.topk, dim=-1).indices 
             x_candidates = v.unsqueeze(1).expand(B, C, C, D) 
             rec_x = torch.gather(x_candidates, dim=2, index=topk_idx.unsqueeze(-1).expand(B, C, self.topk, D))
+        
+
 
         return ST_Rec_ModuleOutput(query_x=q, rec_x=rec_x, rec_logits=logits if return_logits else None) # B, C, k, D
     
@@ -215,6 +218,7 @@ class RevIN(nn.Module):
         super(RevIN, self).__init__()
         self.num_features = num_features
         self.eps = eps
+        self.alpha = 0
         self.affine = affine
         if self.affine:
             self._init_params()
@@ -274,7 +278,7 @@ class ST_LinearModel(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        # self.revin = RevIN(config.channel_dim)
+        self.revin = RevIN(config.channel_dim)
         self.encoder = TimeEncoder(config)
         self.rec_module = ST_Rec_Module(config)
         self.former = ST_TruncateFormer(config)
@@ -285,8 +289,8 @@ class ST_LinearModel(nn.Module):
         # input_ids = self.revin(input_ids, mode="norm")
         rec_logits = ()
         attn = ()
-        input_ids = self.encoder(input_ids.permute(0, 2, 1))
-        rec_outputs = self.rec_module.forward(input_ids, input_ids, input_ids, return_logits=return_logits)
+        x = self.encoder(input_ids.permute(0, 2, 1))
+        rec_outputs = self.rec_module.forward(x, x, input_ids, return_logits=return_logits)
         former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
 
         pred = self.predictor(former_outputs.x[-1]).permute(0, 2, 1)
