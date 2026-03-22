@@ -274,7 +274,7 @@ class ST_LinearModel(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        self.revin = RevIN(config.channel_dim)
+        # self.revin = RevIN(config.channel_dim)
         self.encoder = TimeEncoder(config)
         self.rec_module = ST_Rec_Module(config)
         self.former = ST_TruncateFormer(config)
@@ -282,7 +282,7 @@ class ST_LinearModel(nn.Module):
 
 
     def forward(self, input_ids: torch.Tensor, return_logits=False, return_attn=False):
-        input_ids = self.revin(input_ids, mode="norm")
+        # input_ids = self.revin(input_ids, mode="norm")
         rec_logits = ()
         attn = ()
         input_ids = self.encoder(input_ids.permute(0, 2, 1))
@@ -290,7 +290,7 @@ class ST_LinearModel(nn.Module):
         former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
 
         pred = self.predictor(former_outputs.x[-1]).permute(0, 2, 1)
-        pred = self.revin(pred, mode="denorm")
+        # pred = self.revin(pred, mode="denorm")
 
 
         return ST_LinearModelOutput(pred=(pred,), rec_logits=rec_logits, attn=attn)

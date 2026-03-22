@@ -94,6 +94,6 @@ def train(config_path=None):
     trainer.train()
 
 if __name__ == "__main__":
-    config_path = 'src/train/config/NanChang/short/ST_Linear.toml'
+    config_path = 'src/train/config/NanJing/ST_Linear.toml'
 
     train(config_path)
