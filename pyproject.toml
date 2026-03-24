@@ -8,6 +8,7 @@ dependencies = [
     "accelerate>=1.13.0",
     "datasets>=4.8.2",
     "h5py>=3.16.0",
+    "matplotlib>=3.10.8",
     "pandas>=2.3.3",
     "scikit-learn>=1.7.2",
     "tensorboard>=2.20.0",

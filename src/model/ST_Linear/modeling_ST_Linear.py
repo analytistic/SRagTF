@@ -7,6 +7,7 @@ from transformers.activations import ACT2FN
 from transformers.utils.generic import ModelOutput
 from dataclasses import dataclass
 
+
 @dataclass
 class ST_LinearForTrafficPredictionOutput(ModelOutput):
     loss: torch.Tensor | None = None
@@ -49,12 +50,11 @@ class ST_Rec_Module(nn.Module):
         self.config = config
         self.topk = config.spatio_topk
         self.temperature = config.temperature
-        self.spatio_proj_q = nn.Linear(config.seq_len, config.rec_dim, bias=False)
-        self.spatio_proj_k = nn.Linear(config.seq_len, config.rec_dim, bias=False)
+        self.spatio_proj_q = nn.Linear(config.projection_dim, config.rec_dim, bias=False)
+        self.spatio_proj_k = nn.Linear(config.projection_dim, config.rec_dim, bias=False)
         # self.logits_bias = nn.Parameter(torch.zeros(config.channel_dim, config.channel_dim), requires_grad=True)
         # self.query_emb = nn.Parameter(torch.randn(config.channel_dim, config.rec_dim))
         self.rec_query_dropout = nn.Dropout(config.rec_query_dropout)
-        self.out_linear = nn.Linear(config.seq_len, config.projection_dim)
 
 
     def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, return_logits=False) -> ST_Rec_ModuleOutput:
@@ -84,8 +84,6 @@ class ST_Rec_Module(nn.Module):
             topk_idx = logits.topk(self.topk, dim=-1).indices 
             x_candidates = v.unsqueeze(1).expand(B, C, C, D) 
             rec_x = torch.gather(x_candidates, dim=2, index=topk_idx.unsqueeze(-1).expand(B, C, self.topk, D))
-        
-
 
         return ST_Rec_ModuleOutput(query_x=q, rec_x=rec_x, rec_logits=logits if return_logits else None) # B, C, k, D
     
@@ -173,7 +171,6 @@ class ST_TruncateFormer(nn.Module):
     def __init__(self, config: ST_LinearConfig):
         super().__init__()
         self.config = config
-        self.encoder = TimeEncoder(config)
         self.layers = nn.ModuleList(
             [
                 ST_CrossFormer(config) 
@@ -186,8 +183,6 @@ class ST_TruncateFormer(nn.Module):
         B, C, D = x.shape
         attn = ()
         x_list = ()
-        x = self.encoder(x)
-        x_rec = self.encoder(x_rec)
         for layer in self.layers:
             outputs = layer.forward(x, x_rec, return_attn=return_attn)
             x_list = x_list + (outputs.x,)
@@ -221,7 +216,6 @@ class RevIN(nn.Module):
         super(RevIN, self).__init__()
         self.num_features = num_features
         self.eps = eps
-        self.alpha = 0
         self.affine = affine
         if self.affine:
             self._init_params()
@@ -282,21 +276,23 @@ class ST_LinearModel(nn.Module):
         super().__init__()
         self.config = config
         self.revin = RevIN(config.channel_dim)
+        self.encoder = TimeEncoder(config)
         self.rec_module = ST_Rec_Module(config)
         self.former = ST_TruncateFormer(config)
         self.predictor = Prediction_Module(config)
+       
 
 
-    def forward(self, input_ids: torch.Tensor, return_logits=False, return_attn=False):
-        # input_ids = self.revin(input_ids, mode="norm")
+    def forward(self, input_ids: torch.Tensor, timestamp: torch.Tensor | None, return_logits=False, return_attn=False):
         rec_logits = ()
         attn = ()
-        input_ids = input_ids.permute(0, 2, 1) # B, C, T
+        input_ids = self.revin(input_ids, mode="norm")
+        input_ids = self.encoder(input_ids.permute(0, 2, 1))
+        
         rec_outputs = self.rec_module.forward(input_ids, input_ids, input_ids, return_logits=return_logits)
         former_outputs = self.former.forward(rec_outputs.query_x, rec_outputs.rec_x, return_attn=return_attn)
-
         pred = self.predictor(former_outputs.x[-1]).permute(0, 2, 1)
-        # pred = self.revin(pred, mode="denorm")
+        pred = self.revin(pred, mode="denorm")
 
 
         return ST_LinearModelOutput(pred=(pred,), rec_logits=rec_logits, attn=attn)
@@ -347,9 +343,9 @@ class ST_LinearForTrafficPrediction(PreTrainedModel):
         
         
 
-    def forward(self, timeseries: torch.Tensor, labels: torch.Tensor | None = None, return_logits: bool = True) -> ST_LinearForTrafficPredictionOutput:
+    def forward(self, timeseries: torch.Tensor, labels: torch.Tensor | None = None, timestamp: torch.Tensor | None = None, return_logits: bool = True, **kwargs) -> ST_LinearForTrafficPredictionOutput:
 
-        x = self.model.forward(timeseries, return_logits=return_logits)
+        x = self.model.forward(timeseries, timestamp, return_logits=return_logits)
         loss = None
         if labels is not None:
             loss = self.criterion.forward(x.pred, labels)

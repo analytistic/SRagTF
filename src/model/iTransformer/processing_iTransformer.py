@@ -5,32 +5,48 @@ from sklearn.preprocessing import StandardScaler
 from transformers.feature_extraction_utils import BatchFeature
 from pandas import DataFrame
 import torch
+from ..utils.scaler import ScalerType, StandaryScaler, MinMaxScaler, BaseScaler
+
+
 
 class iTransformerProcessor(FeatureExtractionMixin):
     def __init__(self, 
-                 transform: None,
                  scale: bool,
-                 mean: np.ndarray | List | float | None = None, 
-                 std: np.ndarray | List | float | None = None, 
-                 var: np.ndarray | List | float | None = None
+                 scaler_type: Optional[ScalerType] = None,
+                 **kwargs
                  ):
-
-        if transform is not None:
-            self.transform = transform
-            mean = np.array([getattr(transform, "mean_", 0.0)])
-            std = np.array([getattr(transform, "scale_", 1.0)])
-            var = np.array([getattr(transform, "var_", 1.0)])
-        else:
-            mean = np.array(mean) if mean is not None else np.array([0.0])
-            std = np.array(std) if std is not None else np.array([1.0])
-            var = np.array(var) if var is not None else np.array([1.0])
-            self.transform = StandardScaler()
-            self.transform.mean_ = mean
-            self.transform.scale_ = std
-            self.transform.var_ = var
-        super().__init__(scale=scale, mean=mean, std=std, var=var)
+        super().__init__(scale=scale, scaler_type=scaler_type, **kwargs)
         
         self.scale = scale
+        self.scaler = self._build_scaler(scaler_type, **kwargs) if scale else None
+
+    
+    def _build_scaler(self, scaler_type: ScalerType | None, **kwargs) -> BaseScaler:
+        if scaler_type == ScalerType.STANDARY:
+            return StandaryScaler(**kwargs)
+        elif scaler_type == ScalerType.MINMAX:
+            return MinMaxScaler(**kwargs)
+        else:
+            raise ValueError(f"Unsupported scaler type: {scaler_type}")
+        
+    def fit(self, inputs: np.ndarray):
+        if self.scaler is not None:
+            self.scaler.fit(inputs)
+        else:
+            raise ValueError("No scaler defined to fit the data.")
+    
+    def transform(self, inputs: np.ndarray) -> np.ndarray:
+        if self.scaler is not None:
+            return self.scaler.transform(inputs)
+        else:
+            raise ValueError("No scaler defined to transform the data.")
+        
+    def inverse_transform(self, inputs: np.ndarray) -> np.ndarray:
+        if self.scaler is not None:
+            return self.scaler.inverse_transform(inputs)
+        else:
+            raise ValueError("No scaler defined to inverse transform the data.")
+
     
     def __call__(self, 
                  timeseries: DataFrame | np.ndarray | List, 
@@ -44,9 +60,11 @@ class iTransformerProcessor(FeatureExtractionMixin):
         
         timestamp = timeseries.index if isinstance(timeseries, DataFrame) else None
         timeseries = timeseries.values if isinstance(timeseries, DataFrame) else np.array(timeseries)
-        timeseries = self.transform.transform(timeseries) if scale else timeseries
         labels = labels.values if isinstance(labels, DataFrame) else np.array(labels) if labels is not None else None
-        labels = self.transform.transform(labels) if scale and labels is not None  else labels
+        if self.scaler is not None and self.scale:
+            timeseries = self.scaler.transform(timeseries) if scale else timeseries
+            labels = self.scaler.transform(labels) if scale and labels is not None else labels
+
         outputs["timeseries"] = timeseries
         outputs["timestamp"] = timestamp
         outputs["labels"] = labels
@@ -58,9 +76,11 @@ class iTransformerProcessor(FeatureExtractionMixin):
     
     def to_dict(self):
         output = super().to_dict()
-        output.pop("transform", None)
-
-        for key in ["mean", "std", "var"]:
-            if isinstance(output.get(key), np.ndarray):
-                output[key] = output[key].tolist()
+        scaler = output.pop("scaler", None)
+        if scaler is not None:
+            for key, value in scaler.__dict__.items():
+                if isinstance(value, np.ndarray):
+                    output[key] = value.tolist()
+                elif isinstance(value, (list, int, float, str, bool, type(None))):
+                    output[key] = value
         return output

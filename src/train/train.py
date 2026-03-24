@@ -16,13 +16,15 @@ model_dict = {
     'DP_LET': (DP_LET_Predictor, DP_LETConfig, DP_LETProcessor),
     'iTransformer': (iTransformer, iTransformerConfig, iTransformerProcessor),
     'PatchTST': (PatchTST, PatchTSTConfig, PatchTSTProcessor),
-    'TimeMixer': (TimeMixer, TimeMixerConfig, TimeMixerProcessor)
+    'TimeMixer': (TimeMixer, TimeMixerConfig, TimeMixerProcessor),
+    'TQNet': (TQNet, TQNetConfig, TQNetProcessor),
 }
 dataset_dict = {
     'NanJing': MobileTrafficDataset,
     'Milan': MilanDataset,
     'NanChang': MobileTrafficDataset,
     'ShanDong': MobileTrafficDataset,
+    'ETT': ETTDataset,
 }
 
 
@@ -95,6 +97,6 @@ def train(config_path=None):
     trainer.train()
 
 if __name__ == "__main__":
-    config_path = 'src/train/config/ShanDong/ST_Linear.toml'
+    config_path = 'src/train/config/Milan/12-1/call/TQNet.toml'
 
     train(config_path)

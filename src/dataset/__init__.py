@@ -7,10 +7,12 @@ class BaseCollator:
 from .base_dataset import BaseDataset
 from .milan_datasets import MilanDataset
 from .mobiletraffic_datasets import MobileTrafficDataset
+from .etth_datasets import ETTDataset
 
 __all__ = [
     "BaseCollator",
     "BaseDataset",
     "MilanDataset",
     "MobileTrafficDataset",
+    "ETTDataset",
 ]

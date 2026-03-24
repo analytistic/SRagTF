@@ -65,6 +65,7 @@ class ST_LinearProcessor(FeatureExtractionMixin):
             timeseries = self.scaler.transform(timeseries) if scale else timeseries
             labels = self.scaler.transform(labels) if scale and labels is not None else labels
 
+        timestamp = np.array(timestamp.astype('int64'), dtype=np.int64)[-1] if timestamp is not None else None
         outputs["timeseries"] = timeseries
         outputs["timestamp"] = timestamp
         outputs["labels"] = labels

@@ -1,0 +1,62 @@
+[data_args]
+datasets = "ShanDong"
+data_path = "data/shandong/24_TrafficSD_short64.json"
+num_cells = 100
+data_key = "short"
+scale = true
+scaler_type = 'minmax'
+
+[model_args]
+pretrained_model_name_or_path = "ST_Linear"
+
+[model_args.config]
+seq_len = 48
+pred_len = 16
+patch_size = 16
+projection_dim = 128
+spatio_topk = 3
+channel_dim = 16
+temperature = 0.1
+rec_dim = 128
+temporal_dim = 128
+temporal_ffn = 256
+temporal_proj = false
+act_fn = "relu"
+num_heads = 8
+layers = 3
+encode_dropout = 0.0
+attn_dropout = 0.0
+attn_output_dropout = 0.0
+ffn_1_dropout = 0.0
+ffn_2_dropout = 0.0
+rec_query_dropout = 0.0
+attn_query_dropout = 0.0
+
+[training_args]
+seed = 42
+fp32 = true
+output_dir = "outputs/model_output/ST_Linear_ShanDong_short/"
+num_train_epochs = 50
+optim = "adamw_torch"
+learning_rate = 1e-4
+weight_decay = 0.01
+lr_scheduler_type = "cosine"
+report_to = "tensorboard"
+log_level = "info"
+log_level_replica = "warning"
+logging_strategy = "steps"
+logging_dir = "outputs/tensorboard/ST_Linear_ShanDong_short/"
+logging_steps = 10
+logging_first_step = true
+save_strategy = "epoch"
+load_best_model_at_end = true
+metric_for_best_model = "eval_mae"
+greater_is_better = false
+save_total_limit = 1
+eval_strategy = "epoch"
+warmup_ratio = 0.05
+eval_on_start = true 
+per_device_train_batch_size = 64
+per_device_eval_batch_size = 5
+dataloader_num_workers = 1
+dataloader_pin_memory = false

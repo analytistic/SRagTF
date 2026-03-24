@@ -9,6 +9,8 @@ from src.model.PatchTST.processing_PatchTST import PatchTSTProcessor
 from src.model.TimeMixer.configuration_TimeMixer import TimeMixerConfig
 from src.model.TimeMixer.modeling_TimeMixer import TimeMixer
 from src.model.TimeMixer.processing_TimeMixer import TimeMixerProcessor
+from src.model.TQNet.modeling_TQNet import TQNet, TQNetConfig, TQNetOutput
+from src.model.TQNet.processing_TQNet import TQNetProcessor
 
 
 __all__ = [
@@ -26,5 +28,9 @@ __all__ = [
     "PatchTSTProcessor",
     "TimeMixer",
     "TimeMixerConfig",
-    "TimeMixerProcessor"
+    "TimeMixerProcessor",
+    "TQNet",
+    "TQNetConfig",
+    "TQNetOutput",
+    "TQNetProcessor",
 ]

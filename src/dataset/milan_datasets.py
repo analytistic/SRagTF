@@ -107,10 +107,7 @@ class MilanDataset(BaseDataset):
                 scale=self.scale,
                 return_tensors="pt"
             )
-            return dict(
-                timeseries=data["timeseries"],
-                labels=data["labels"],
-            )
+            return {key: value for key, value in data.items()}
         else:
             return dict(
                 timeseries=torch.tensor(inputs.values, dtype=torch.float),

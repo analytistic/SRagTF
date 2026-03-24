@@ -1,0 +1,48 @@
+[data_args]
+datasets = "Milan"
+data_path = "data/milano.h5"
+num_cells = 100
+scale = true
+scaler_type = "standary"
+
+[model_args]
+pretrained_model_name_or_path = "TQNet"
+
+[model_args.config]
+seq_len=12
+pred_len=1
+enc_in = 100
+cycle_len=24
+model_type="TQNet"
+d_model=512
+dropout=0.5
+use_revin=true
+
+[training_args]
+seed = 42
+fp32 = true
+output_dir = "outputs/model_output/TQNet_Milan_call_12_1/"
+num_train_epochs = 50
+optim = "adamw_torch"
+learning_rate = 1e-4
+weight_decay = 0.01
+lr_scheduler_type = "cosine"
+report_to = "tensorboard"
+log_level = "info"
+log_level_replica = "warning"
+logging_strategy = "steps"
+logging_dir = "outputs/tensorboard/TQNet_Milan_call_12_1/"
+logging_steps = 10
+logging_first_step = true
+save_strategy = "epoch"
+load_best_model_at_end = true
+metric_for_best_model = "eval_mse"
+greater_is_better = false
+save_total_limit = 1
+eval_strategy = "epoch"
+warmup_ratio = 0.05
+eval_on_start = true 
+per_device_train_batch_size = 64
+per_device_eval_batch_size = 5
+dataloader_num_workers = 1
+dataloader_pin_memory = false

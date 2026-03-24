@@ -1,0 +1,23 @@
+{
+  "activation": "relu",
+  "architectures": [
+    "iTransformer"
+  ],
+  "d_ff": 256,
+  "d_model": 256,
+  "dropout": 0.0,
+  "dtype": "float32",
+  "e_layers": 2,
+  "embed": "fixed",
+  "factor": 1,
+  "freq": "h",
+  "layers": 2,
+  "model_type": "itransformer",
+  "n_heads": 8,
+  "output_attention": false,
+  "pred_len": 96,
+  "seq_len": 96,
+  "transformers_version": "5.3.0",
+  "use_cache": false,
+  "use_norm": true
+}
